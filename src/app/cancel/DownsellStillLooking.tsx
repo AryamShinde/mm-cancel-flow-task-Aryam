@@ -88,8 +88,8 @@ const DownsellStillLooking: React.FC<DownsellStillLookingProps> = ({ onBack, onC
             </button>
           </div>
         </div>
-        {/* RIGHT image */}
-        <div className="md:pl-2 self-stretch flex">
+  {/* RIGHT image (hidden on mobile) */}
+  <div className="hidden self-stretch md:flex md:pl-2">
           <div className="relative w-full h-full overflow-hidden rounded-xl border border-gray-200 shadow-sm min-h-[240px]">
             <Image
               src="/empire-state-compressed.jpg"

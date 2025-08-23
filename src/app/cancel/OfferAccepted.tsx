@@ -23,7 +23,7 @@ const OfferAccepted: React.FC<OfferAcceptedProps> = ({ onFinish, onClose, onBack
           </svg>
           Back
         </button>
-        <div className="text-center text-[15px] font-medium text-gray-800">Subscription</div>
+        <div className="text-center text-[15px] font-medium text-gray-800">Subscription continued</div>
         <button
           onClick={onClose}
           className="inline-flex items-center justify-center rounded p-1 text-gray-400 transition hover:text-gray-600"

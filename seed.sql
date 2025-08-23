@@ -2,6 +2,9 @@
 -- Database schema and seed data for subscription cancellation flow
 -- Does not include production-level optimizations or advanced RLS policies
 
+-- Ensure required extensions
+CREATE EXTENSION IF NOT EXISTS "pgcrypto"; -- needed for gen_random_uuid()
+
 -- Enable Row Level Security
 
 -- Create users table

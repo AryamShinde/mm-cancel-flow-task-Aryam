@@ -128,8 +128,8 @@ const FoundJobStepVisa: React.FC<FoundJobStepVisaProps> = ({ onBack, onComplete,
             Complete cancellation
           </button>
         </div>
-        {/* Right column (image) */}
-        <div className="md:pl-2 self-stretch flex">
+  {/* Right column (image hidden on mobile) */}
+  <div className="hidden md:flex md:pl-2 self-stretch">
           <div className="relative w-full overflow-hidden rounded-xl border border-gray-200 shadow-sm min-h-[240px]">
             <Image
               src="/empire-state-compressed.jpg"

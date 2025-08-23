@@ -51,19 +51,20 @@ export default function CancellationFlow() {
   };
 
   return (
-    <div className="min-h-screen z-10 flex items-center justify-center bg-[#e5e7eb] px-4 py-8">
-  <div className="relative w-full max-w-5xl rounded-2xl bg-white shadow-xl border border-gray-200">
+    <div className="min-h-screen z-10 flex items-start md:items-center justify-center bg-[#e5e7eb] px-3 sm:px-4 py-4 sm:py-8">
+  <div className="relative w-full max-w-5xl rounded-none md:rounded-2xl bg-white shadow-none md:shadow-xl border-0 md:border md:border-gray-200 md:mx-auto md:my-0">
 
         <div>
           {step === 'initial' && (
             <>
               {/* Unified header (no step counter on first page) */}
-              <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
-                <div style={{ width: 40 }} />
-                <div className="text-center text-[15px] font-medium text-gray-800">Subscription Cancellation</div>
+              <div className="flex items-center border-b border-gray-200 px-4 sm:px-6 py-4">
+                <div className="flex-1">
+                  <div className="text-left md:text-center text-[15px] font-medium text-gray-800">Subscription Cancellation</div>
+                </div>
                 <button
                   onClick={handleClose}
-                  className="inline-flex items-center justify-center rounded p-1 text-gray-400 transition hover:text-gray-600"
+                  className="ml-2 inline-flex items-center justify-center rounded p-1 text-gray-400 transition hover:text-gray-600"
                   aria-label="Close"
                 >
                   <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -72,9 +73,20 @@ export default function CancellationFlow() {
                 </button>
               </div>
               {/* Body */}
-              <div className="flex gap-6 p-5">
-                {/* Left column */}
-                <div className="flex flex-col flex-[1.7] py-1">
+              <div className="flex flex-col md:flex-row gap-6 p-4 sm:p-5">
+                {/* Image (mobile first) */}
+                <div className="relative w-full md:hidden h-44 sm:h-56 overflow-hidden rounded-xl">
+                  <Image
+                    src="/empire-state-compressed.jpg"
+                    alt="Empire State Building"
+                    fill
+                    className="object-cover"
+                    priority
+                    sizes="(max-width: 768px) 100vw, 40vw"
+                  />
+                </div>
+                {/* Left column / textual content */}
+                <div className="flex flex-col flex-[1.7] py-1 md:pt-2">
                   <div className="space-y-4">
                     <h2 className="font-semibold leading-tight text-gray-900 text-[clamp(24px,2.4vw,34px)]">
                       Hey mate,<br />
@@ -91,20 +103,20 @@ export default function CancellationFlow() {
                   <div className="mt-4 space-y-2.5">
                     <button
                       onClick={() => handleFoundJobResponse(true)}
-                      className="w-full rounded-lg border border-gray-200 bg-white px-5 py-3 text-center text-[clamp(14px,1vw,16px)] font-medium text-gray-900 transition hover:border-gray-300 hover:bg-gray-50"
+                      className="w-full rounded-lg border border-gray-200 bg-white px-5 py-3 text-center text-[15px] md:text-[clamp(14px,1vw,16px)] font-medium text-gray-900 transition hover:border-gray-300 hover:bg-gray-50"
                     >
                       Yes, I&apos;ve found a job
                     </button>
                     <button
                       onClick={() => handleFoundJobResponse(false)}
-                      className="w-full rounded-lg border border-gray-200 bg-white px-5 py-3 text-center text-[clamp(14px,1vw,16px)] font-medium text-gray-700 transition hover:border-gray-300 hover:bg-gray-50"
+                      className="w-full rounded-lg border border-gray-200 bg-white px-5 py-3 text-center text-[15px] md:text-[clamp(14px,1vw,16px)] font-medium text-gray-700 transition hover:border-gray-300 hover:bg-gray-50"
                     >
                       Not yet – I&apos;m still looking
                     </button>
                   </div>
                 </div>
-                {/* Right column (image) */}
-                <div className="relative flex flex-1 overflow-hidden rounded-xl">
+                {/* Right column (image desktop) */}
+                <div className="relative hidden md:flex flex-1 overflow-hidden rounded-xl">
                   <Image
                     src="/empire-state-compressed.jpg"
                     alt="Empire State Building"
@@ -115,6 +127,8 @@ export default function CancellationFlow() {
                   />
                 </div>
               </div>
+              {/* Mobile bottom gradient spacer (simulate safe area & separation) */}
+              <div className="md:hidden h-4" />
             </>
           )}
 

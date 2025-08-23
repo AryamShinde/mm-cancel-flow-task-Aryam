@@ -141,8 +141,8 @@ const OfferDeclined: React.FC<OfferDeclinedProps> = ({ onBack, onClose, onContin
             </button>
           </div>
         </div>
-        {/* RIGHT image */}
-        <div className="md:pl-2 self-stretch flex">
+  {/* RIGHT image (hidden on mobile) */}
+  <div className="hidden md:flex md:pl-2 self-stretch">
           <div className="relative w-full h-full overflow-hidden rounded-xl border border-gray-200 shadow-sm min-h-[240px]">
             <Image
               src="/empire-state-compressed.jpg"
