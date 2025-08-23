@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import Image from 'next/image';
 
 interface OfferDeclinedReasonProps {
+  showDiscount?: boolean; // only variant B
   onBack: () => void;
   onClose: () => void;
   onAccept: () => void; // accept discount after seeing reason screen
@@ -22,7 +23,7 @@ const REASONS: { key: ReasonKey; label: string }[] = [
   { key: 'other', label: 'Other' },
 ];
 
-const OfferDeclinedReason: React.FC<OfferDeclinedReasonProps> = ({ onBack, onClose, onAccept, onComplete }) => {
+const OfferDeclinedReason: React.FC<OfferDeclinedReasonProps> = ({ showDiscount, onBack, onClose, onAccept, onComplete }) => {
   const [selected, setSelected] = useState<ReasonKey | null>(null);
   const [detail, setDetail] = useState('');
   const [attempted, setAttempted] = useState(false);
@@ -166,12 +167,14 @@ const OfferDeclinedReason: React.FC<OfferDeclinedReasonProps> = ({ onBack, onClo
               </div>
             )}
             <hr className="border-gray-200" />
-            <button
-              onClick={onAccept}
-              className="w-full rounded-md bg-green-500 px-6 py-3 text-[15px] font-medium text-white shadow-sm transition hover:bg-green-600"
-            >
-              Get 50% off | $12.50 <span className="line-through text-gray-200 ml-1">$25</span>
-            </button>
+            {showDiscount && (
+              <button
+                onClick={onAccept}
+                className="w-full rounded-md bg-green-500 px-6 py-3 text-[15px] font-medium text-white shadow-sm transition hover:bg-green-600"
+              >
+                Get $10 off | $15 <span className="line-through text-gray-200 ml-1">$25</span>
+              </button>
+            )}
             <button
               onClick={() => {
                 if (!selected) {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 // Mock user data for UI display
@@ -42,6 +42,33 @@ export default function ProfilePage() {
   const handleClose = () => {
     console.log('Navigate to jobs');
   };
+
+  // Early deterministic A/B variant assignment BEFORE user initiates cancellation flow
+  useEffect(() => {
+    const KEY = 'mm_downsell_variant';
+  const SALT = 'mm_downsell_v1_salt'; // TODO: move to env/server later
+    const assign = async () => {
+      if (typeof window === 'undefined') return;
+      const existing = window.localStorage.getItem(KEY);
+      if (existing === 'A' || existing === 'B') {
+        console.log('[Variant] Existing downsell variant:', existing);
+        return;
+      }
+      try {
+        const seed = mockUser.id; // stable user id (replace with real auth user id in production)
+    const data = new TextEncoder().encode(`${SALT}|${seed}`);
+        const hash = await crypto.subtle.digest('SHA-256', data);
+        const first = new Uint8Array(hash)[0];
+        const variant = first < 128 ? 'A' : 'B';
+        window.localStorage.setItem(KEY, variant);
+    console.log('[Variant] Assigned downsell variant early:', variant, 'salt:', SALT);
+      } catch (e) {
+        console.warn('[Variant] Failed to assign variant, defaulting to A', e);
+        window.localStorage.setItem(KEY, 'A');
+      }
+    };
+    assign();
+  }, []);
 
   if (loading) {
     return (
@@ -251,6 +278,7 @@ export default function ProfilePage() {
                     </button>
                     <button
                       onClick={() => {
+                        // Variant already assigned via useEffect above
                         router.push('/cancel');
                       }}
                       className="inline-flex items-center justify-center w-full px-4 py-3 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-50 hover:border-red-300 transition-all duration-200 shadow-sm group"

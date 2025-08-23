@@ -47,7 +47,7 @@ const OfferAccepted: React.FC<OfferAcceptedProps> = ({ onFinish, onClose, onBack
             </p>
             <div className="text-[13px] leading-relaxed text-gray-800 space-y-1">
               <p>You&apos;ve got <span className="font-medium">XX days</span> left on your current plan.</p>
-              <p>Starting from <span className="font-medium">XX date</span>, your monthly payment will be <span className="font-medium">$12.50</span>.</p>
+              <p>Starting from <span className="font-medium">XX date</span>, your monthly payment will be <span className="font-medium">$15</span> (standard $25).</p>
             </div>
             <div className="text-[11px] italic text-gray-500 pt-2">
               You can cancel anytime before then.

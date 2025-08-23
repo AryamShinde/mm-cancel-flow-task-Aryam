@@ -27,27 +27,59 @@ export default function CancellationFlow() {
   const [visaDetails, setVisaDetails] = useState<{ providesLawyer: boolean; visaType: string } | null>(null);
 
   useEffect(() => {
-    const run = async () => {
-      try {
-        const existing = await checkExistingVariant();
-        if (existing) return setDownsellVariant(existing);
-        const a = new Uint8Array(1);
-        crypto.getRandomValues(a);
-        const v: DownsellVariant = a[0] < 128 ? 'A' : 'B';
-        setDownsellVariant(v);
-        await persistDownsellVariant(v);
-      } catch {
-        setDownsellVariant('A');
+    // Read variant that should already be assigned on profile page; fallback if missing.
+    if (downsellVariant) return;
+    const KEY = 'mm_downsell_variant';
+    if (typeof window !== 'undefined') {
+      const existing = window.localStorage.getItem(KEY);
+      if (existing === 'A' || existing === 'B') {
+        setDownsellVariant(existing);
+        console.log('[CancelFlow] Using pre-assigned variant:', existing);
+        return;
       }
-    };
-    if (!downsellVariant) run();
+    }
+    // Fallback deterministic assignment (rare)
+    (async () => {
+      try {
+        const seed = cryptoRandomFallback();
+        const v = await deterministicVariant(seed);
+        setDownsellVariant(v);
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem('mm_downsell_variant', v);
+        }
+        console.log('[CancelFlow] Assigned fallback variant:', v);
+      } catch (e) {
+        setDownsellVariant('A');
+        console.warn('[CancelFlow] Fallback to A after error', e);
+      }
+    })();
   }, [downsellVariant]);
+
+  // Helpers: deterministic hashing (SHA-256 first byte)
+  const deterministicVariant = async (seed: string): Promise<DownsellVariant> => {
+  const SALT = 'mm_downsell_v1_salt'; // keep inline for now; move server-side later
+  const data = new TextEncoder().encode(`${SALT}|${seed}`);
+    const hash = await crypto.subtle.digest('SHA-256', data);
+    const first = new Uint8Array(hash)[0];
+    return first < 128 ? 'A' : 'B';
+  };
+  const cryptoRandomFallback = () => {
+    const a = new Uint8Array(1); crypto.getRandomValues(a); return `anon-${a[0]}`; };
+  const getStableUserId = async (): Promise<string | null> => null; // TODO integrate auth
 
   const handleClose = () => router.push('/');
   const handleFoundJobResponse = (found: boolean) => {
     setReason(prev => ({ ...prev, foundJob: found }));
-    // If user has NOT found a job, show downsell first. Otherwise go to detailed job questions.
-    setStep(found ? 'foundJob' : 'downsell');
+    if (found) {
+      setStep('foundJob');
+    } else {
+      // If user has NOT found a job: show downsell ONLY for variant B; variant A goes straight to offerDeclined.
+      if (downsellVariant === 'A') {
+        setStep('offerDeclined');
+      } else {
+        setStep('downsell');
+      }
+    }
   };
 
   return (
@@ -102,12 +134,14 @@ export default function CancellationFlow() {
                   </div>
                   <div className="mt-4 space-y-2.5">
                     <button
+                      disabled={!downsellVariant}
                       onClick={() => handleFoundJobResponse(true)}
                       className="w-full rounded-lg border border-gray-200 bg-white px-5 py-3 text-center text-[15px] md:text-[clamp(14px,1vw,16px)] font-medium text-gray-900 transition hover:border-gray-300 hover:bg-gray-50"
                     >
                       Yes, I&apos;ve found a job
                     </button>
                     <button
+                      disabled={!downsellVariant}
                       onClick={() => handleFoundJobResponse(false)}
                       className="w-full rounded-lg border border-gray-200 bg-white px-5 py-3 text-center text-[15px] md:text-[clamp(14px,1vw,16px)] font-medium text-gray-700 transition hover:border-gray-300 hover:bg-gray-50"
                     >
@@ -132,7 +166,7 @@ export default function CancellationFlow() {
             </>
           )}
 
-          {step === 'downsell' && (
+          {step === 'downsell' && downsellVariant === 'B' && (
             <DownsellStillLooking
               onBack={() => setStep('initial')}
               onClose={handleClose}
@@ -195,22 +229,24 @@ export default function CancellationFlow() {
             <OfferAccepted
               onFinish={() => router.push('/')}
               onClose={handleClose}
-              onBack={() => setStep('downsell')}
+              onBack={() => setStep(downsellVariant === 'B' ? 'downsell' : 'offerDeclined')}
             />
           )}
           {step === 'offerDeclined' && (
             <OfferDeclined
-              onBack={() => setStep('downsell')}
+              showDiscount={downsellVariant === 'B'}
+              onBack={() => setStep('initial')}
               onClose={handleClose}
               onAccept={() => setStep('offerAccepted')}
               onContinue={(answers) => {
-                setFoundJobAnswers(answers); // reuse storage if useful later
+                setFoundJobAnswers(answers);
                 setStep('offerDeclinedReason');
               }}
             />
           )}
           {step === 'offerDeclinedReason' && (
             <OfferDeclinedReason
+              showDiscount={downsellVariant === 'B'}
               onBack={() => setStep('offerDeclined')}
               onClose={handleClose}
               onAccept={() => setStep('offerAccepted')}

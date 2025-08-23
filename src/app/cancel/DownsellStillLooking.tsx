@@ -57,14 +57,14 @@ const DownsellStillLooking: React.FC<DownsellStillLookingProps> = ({ onBack, onC
               We&apos;ve been there and we&apos;re here to help you.
             </p>
 
-            {/* Offer card */}
+            {/* Offer card: flat $10 off */}
             <div className="rounded-xl border border-[#c9b5ff] bg-[#f3ebff] p-6 shadow-sm">
               <div className="text-center mb-4">
                 <p className="text-[29px] font-medium text-gray-900">
-                  Here&apos;s <span className="font-semibold underline underline-offset-2">50% off</span> until you find a job.
+                  Here&apos;s <span className="font-semibold underline underline-offset-2">$10 off</span> until you find a job.
                 </p>
                 <div className="mt-2 flex items-center justify-center gap-4">
-                  <span className="text-[27px] font-semibold text-[#4f46e5]">$12.50<span className="text-[27px] font-normal text-gray-600">/month</span></span>
+                  <span className="text-[27px] font-semibold text-[#4f46e5]">$15<span className="text-[27px] font-normal text-gray-600">/month</span></span>
                   <span className="text-gray-400 line-through text-[20px]">$25/month</span>
                 </div>
               </div>
@@ -72,10 +72,10 @@ const DownsellStillLooking: React.FC<DownsellStillLookingProps> = ({ onBack, onC
                 onClick={onAccept}
                 className="w-full rounded-md bg-green-500 px-6 py-3 text-[18px] font-medium text-white shadow-sm transition hover:bg-green-600"
               >
-                Get 50% off
+                Get $10 off
               </button>
               <div className="mt-2 text-center text-[11px] text-gray-600 italic">
-                You won&apos;t be charged until your next billing date.
+                Discount applies from your next billing date.
               </div>
             </div>
 
