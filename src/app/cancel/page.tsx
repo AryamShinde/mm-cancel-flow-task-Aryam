@@ -18,17 +18,24 @@ import PageEnd from './PageEnd';
 
 export default function CancellationFlow() {
   const router = useRouter();
+  // Mock user (replace with real auth user context)
+  const mockUserEmail = 'user1@example.com';
   const [step, setStep] = useState<CancellationStep>('initial');
   const [downsellVariant, setDownsellVariant] = useState<DownsellVariant | null>(null);
   const [reason, setReason] = useState<CancellationReason>({ foundJob: false });
+  const [freeFormReason, setFreeFormReason] = useState<string>('');
+  const [acceptedDownsell, setAcceptedDownsell] = useState<boolean>(false);
   const [review, setReview] = useState('');
   const [foundJobAnswers, setFoundJobAnswers] = useState<Record<string, string | null>>();
   // Stores visa step details once completed
   const [visaDetails, setVisaDetails] = useState<{ providesLawyer: boolean; visaType: string } | null>(null);
+  const [cancellationLogged, setCancellationLogged] = useState(false);
+  // const FORCE_VARIANT: DownsellVariant = 'B';
+  const [subscriptionPriceCents, setSubscriptionPriceCents] = useState<number | null>(null);
 
+  // ORIGINAL VARIANT ASSIGNMENT LOGIC (active)
   useEffect(() => {
-    // Read variant that should already be assigned on profile page; fallback if missing.
-    if (downsellVariant) return;
+    if (downsellVariant) return; // already set
     const KEY = 'mm_downsell_variant';
     if (typeof window !== 'undefined') {
       const existing = window.localStorage.getItem(KEY);
@@ -37,8 +44,19 @@ export default function CancellationFlow() {
         console.log('[CancelFlow] Using pre-assigned variant:', existing);
         return;
       }
+      // TEMP TEST OVERRIDES (keep in sync with profile page):
+      const overrides: Record<string, DownsellVariant> = {
+        'user1@example.com': 'A',
+        'user2@example.com': 'B',
+        'user2@examplel.com': 'B',
+      };
+      if (overrides[mockUserEmail]) {
+        setDownsellVariant(overrides[mockUserEmail]);
+        window.localStorage.setItem(KEY, overrides[mockUserEmail]);
+        console.log('[CancelFlow] Assigned via test override:', overrides[mockUserEmail]);
+        return;
+      }
     }
-    // Fallback deterministic assignment (rare)
     (async () => {
       try {
         const seed = cryptoRandomFallback();
@@ -55,10 +73,46 @@ export default function CancellationFlow() {
     })();
   }, [downsellVariant]);
 
+  // ---------------------------------------------------------------------------
+  // Forcing Variant B (Testing ONLY):
+  // To temporarily force all sessions into Variant B for local testing, you can
+  // uncomment the block below. Remember to re-comment / remove before commit to
+  // avoid skewing real experiment data.
+  //
+  // const FORCE_VARIANT: DownsellVariant | null = 'B';
+  // useEffect(() => {
+  //   if (FORCE_VARIANT) {
+  //     setDownsellVariant(FORCE_VARIANT);
+  //     if (typeof window !== 'undefined') {
+  //       window.localStorage.setItem('mm_downsell_variant', FORCE_VARIANT);
+  //     }
+  //     console.log('[CancelFlow] Forced variant set to', FORCE_VARIANT);
+  //   }
+  // }, [FORCE_VARIANT]);
+  // ---------------------------------------------------------------------------
+
+  // Fetch subscription price (for dynamic $10 off display) once
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const res = await fetch(`/api/subscription-status?email=${encodeURIComponent(mockUserEmail)}`);
+        const json = await res.json();
+        if (!cancelled && res.ok && typeof json.monthly_price === 'number') {
+          setSubscriptionPriceCents(json.monthly_price);
+        }
+      } catch (e) {
+        console.warn('[CancelFlow] Failed to fetch subscription price', e);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [mockUserEmail]);
+
   // Helpers: deterministic hashing (SHA-256 first byte)
   const deterministicVariant = async (seed: string): Promise<DownsellVariant> => {
-  const SALT = 'mm_downsell_v1_salt'; // keep inline for now; move server-side later
-  const data = new TextEncoder().encode(`${SALT}|${seed}`);
+    const SALT = process.env.NEXT_PUBLIC_AB_VARIANT_SALT || 'mm_downsell_v1_salt';
+    const data = new TextEncoder().encode(`${SALT}|${seed}`);
     const hash = await crypto.subtle.digest('SHA-256', data);
     const first = new Uint8Array(hash)[0];
     return first < 128 ? 'A' : 'B';
@@ -168,6 +222,7 @@ export default function CancellationFlow() {
 
           {step === 'downsell' && downsellVariant === 'B' && (
             <DownsellStillLooking
+              originalPriceCents={subscriptionPriceCents || 2500}
               onBack={() => setStep('initial')}
               onClose={handleClose}
               onAccept={() => setStep('offerAccepted')}
@@ -202,6 +257,31 @@ export default function CancellationFlow() {
               onBack={() => setStep('review')}
               onComplete={details => {
                 setVisaDetails(details);
+                // Persist cancellation immediately for found-job path (visa branch) if not already logged
+                if (!cancellationLogged) {
+      const conciseReason = `found_job: yes; visa_support: ${details.providesLawyer ? 'company_lawyer' : 'needs_support'}; visa_type: ${details.visaType || 'unspecified'}`;
+                  (async () => {
+                    try {
+                      await fetch('/api/cancellations', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          email: mockUserEmail,
+                          downsell_variant: (downsellVariant || 'A'),
+                          reason: conciseReason,
+        accepted_downsell: false,
+        visa_type: details.visaType || null,
+        visa_help: !details.providesLawyer, // user needs help if company does NOT provide lawyer
+        found_job_with_mm: foundJobAnswers?.mmFound === 'Yes' ? true : (foundJobAnswers?.mmFound === 'No' ? false : null)
+                        })
+                      });
+                      setCancellationLogged(true);
+                      console.log('[CancelFlow] Cancellation persisted (visa path).');
+                    } catch (e) {
+                      console.warn('[CancelFlow] Failed to persist cancellation (visa path)', e);
+                    }
+                  })();
+                }
                 // Inverted: if user selects "No" (no company lawyer), route to visaHelp (we'll help them)
                 // If "Yes" (company provides a lawyer), route to visaNoHelp (no extra help needed)
                 if (!details.providesLawyer) {
@@ -227,14 +307,19 @@ export default function CancellationFlow() {
           )}
           {step === 'offerAccepted' && (
             <OfferAccepted
+              originalPriceCents={subscriptionPriceCents || 2500}
               onFinish={() => router.push('/')}
               onClose={handleClose}
               onBack={() => setStep(downsellVariant === 'B' ? 'downsell' : 'offerDeclined')}
+              // Mark accepted downsell if variant B path leads here
+              // (If variant B and they reached offerAccepted, treat as accepted)
+              {...(downsellVariant === 'B' ? { } : {})}
             />
           )}
           {step === 'offerDeclined' && (
             <OfferDeclined
               showDiscount={downsellVariant === 'B'}
+              originalPriceCents={subscriptionPriceCents || 2500}
               onBack={() => setStep('initial')}
               onClose={handleClose}
               onAccept={() => setStep('offerAccepted')}
@@ -247,17 +332,23 @@ export default function CancellationFlow() {
           {step === 'offerDeclinedReason' && (
             <OfferDeclinedReason
               showDiscount={downsellVariant === 'B'}
+              originalPriceCents={subscriptionPriceCents || 2500}
               onBack={() => setStep('offerDeclined')}
               onClose={handleClose}
               onAccept={() => setStep('offerAccepted')}
               onComplete={(reasonText) => {
                 setReview(reasonText);
+                setFreeFormReason(reasonText);
                 setStep('pageEnd');
               }}
             />
           )}
           {step === 'pageEnd' && (
             <PageEnd
+              userEmail={mockUserEmail}
+              reasonText={freeFormReason}
+              downsellVariant={downsellVariant || 'A'}
+              acceptedDownsell={acceptedDownsell}
               onBack={() => setStep('offerDeclinedReason')}
               onClose={handleClose}
               onFinish={() => router.push('/')}

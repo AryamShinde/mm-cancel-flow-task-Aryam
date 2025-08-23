@@ -5,6 +5,7 @@ import Image from 'next/image';
 
 interface OfferDeclinedProps {
   showDiscount?: boolean; // only variant B
+  originalPriceCents: number;
   onBack: () => void;
   onClose: () => void;
   onContinue: (answers: Record<string, string | null>) => void; // proceed
@@ -15,7 +16,9 @@ const BRAND = '#bebedaff';
 const ACTIVE_PILL = '#8952fc';
 const CONTINUE_READY = '#d92d20';
 
-const OfferDeclined: React.FC<OfferDeclinedProps> = ({ showDiscount, onBack, onClose, onContinue, onAccept }) => {
+const OfferDeclined: React.FC<OfferDeclinedProps> = ({ showDiscount, originalPriceCents, onBack, onClose, onContinue, onAccept }) => {
+  const discounted = Math.max(originalPriceCents - 1000, 0);
+  const fmt = (c: number) => `$${(c/100).toFixed(c % 100 === 0 ? 0 : 2)}`;
   const [answers, setAnswers] = useState<Record<string, string | null>>({
     rolesApplied: null,
     companiesEmailed: null,
@@ -121,14 +124,14 @@ const OfferDeclined: React.FC<OfferDeclinedProps> = ({ showDiscount, onBack, onC
 
             <hr className="border-gray-200" />
 
-            {showDiscount && (
+    {showDiscount && (
               <>
                 <hr className="border-gray-200" />
                 <button
                   onClick={onAccept}
                   className="w-full rounded-md bg-green-500 px-6 py-3 text-[15px] font-medium text-white shadow-sm transition hover:bg-green-600"
                 >
-                  Get $10 off | $15 <span className="line-through text-gray-200 ml-1">$25</span>
+      Get $10 off | {fmt(discounted)} <span className="line-through text-gray-200 ml-1">{fmt(originalPriceCents)}</span>
                 </button>
               </>
             )}

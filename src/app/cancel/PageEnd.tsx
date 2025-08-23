@@ -7,9 +7,45 @@ interface PageEndProps {
   onBack: () => void; // allow user to go back to reason edit if desired
   onClose: () => void;
   onFinish: () => void; // return to jobs / home
+  userEmail: string; // needed to mark subscription as pending cancellation
+  reasonText: string;
+  downsellVariant: 'A' | 'B';
+  acceptedDownsell: boolean;
 }
 
-const PageEnd: React.FC<PageEndProps> = ({ onBack, onClose, onFinish }) => {
+const PageEnd: React.FC<PageEndProps> = ({ onBack, onClose, onFinish, userEmail, reasonText, downsellVariant, acceptedDownsell }) => {
+  React.useEffect(() => {
+    let aborted = false;
+    const mark = async () => {
+      try {
+        const res = await fetch('/api/cancellations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: userEmail,
+            downsell_variant: downsellVariant,
+            reason: reasonText || null,
+            accepted_downsell: acceptedDownsell,
+            visa_type: null,
+            visa_help: null,
+            found_job_with_mm: null
+          })
+        });
+        const json = await res.json();
+        if (!aborted) {
+          if (!res.ok) {
+            console.warn('[Cancel] Failed to persist cancellation:', json.error);
+          } else {
+            console.log('[Cancel] Cancellation persisted');
+          }
+        }
+      } catch (e) {
+        if (!aborted) console.warn('[Cancel] Error marking pending cancellation', e);
+      }
+    };
+    mark();
+    return () => { aborted = true; };
+  }, [userEmail]);
   return (
     <div className="flex flex-col">
       {/* Header */}

@@ -5,6 +5,7 @@ import Image from 'next/image';
 
 interface OfferDeclinedReasonProps {
   showDiscount?: boolean; // only variant B
+  originalPriceCents: number;
   onBack: () => void;
   onClose: () => void;
   onAccept: () => void; // accept discount after seeing reason screen
@@ -23,7 +24,7 @@ const REASONS: { key: ReasonKey; label: string }[] = [
   { key: 'other', label: 'Other' },
 ];
 
-const OfferDeclinedReason: React.FC<OfferDeclinedReasonProps> = ({ showDiscount, onBack, onClose, onAccept, onComplete }) => {
+const OfferDeclinedReason: React.FC<OfferDeclinedReasonProps> = ({ showDiscount, originalPriceCents, onBack, onClose, onAccept, onComplete }) => {
   const [selected, setSelected] = useState<ReasonKey | null>(null);
   const [detail, setDetail] = useState('');
   const [attempted, setAttempted] = useState(false);
@@ -167,12 +168,12 @@ const OfferDeclinedReason: React.FC<OfferDeclinedReasonProps> = ({ showDiscount,
               </div>
             )}
             <hr className="border-gray-200" />
-            {showDiscount && (
+      {showDiscount && (
               <button
                 onClick={onAccept}
                 className="w-full rounded-md bg-green-500 px-6 py-3 text-[15px] font-medium text-white shadow-sm transition hover:bg-green-600"
               >
-                Get $10 off | $15 <span className="line-through text-gray-200 ml-1">$25</span>
+        {(() => { const d = Math.max(originalPriceCents - 1000, 0); const fmt = (c:number)=>`$${(c/100).toFixed(c%100===0?0:2)}`; return `Get $10 off | ${fmt(d)}`; })()} <span className="line-through text-gray-200 ml-1">{`$${(originalPriceCents/100).toFixed(originalPriceCents%100===0?0:2)}`}</span>
               </button>
             )}
             <button

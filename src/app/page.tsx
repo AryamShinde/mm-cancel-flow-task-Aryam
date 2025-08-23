@@ -9,22 +9,36 @@ const mockUser = {
   id: '1'
 };
 
-// Mock subscription data for UI display
-const mockSubscriptionData = {
-  status: 'active',
-  isTrialSubscription: false,
-  cancelAtPeriodEnd: false,
-  currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days from now
-  monthlyPrice: 25,
-  isUCStudent: false,
-  hasManagedAccess: false,
-  managedOrganization: null,
-  downsellAccepted: false
-};
+// Remote subscription status state
 
 export default function ProfilePage() {
   const router = useRouter();
-  const [loading] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [subscriptionStatus, setSubscriptionStatus] = useState<string | null>(null);
+  const [monthlyPrice, setMonthlyPrice] = useState<number | null>(null);
+  // Fetch subscription status from Supabase via API (hardcoded email)
+  useEffect(() => {
+    const fetchStatus = async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(`/api/subscription-status?email=${encodeURIComponent(mockUser.email)}`);
+        const json = await res.json();
+        if (res.ok) {
+          setSubscriptionStatus(json.status);
+          if (json.monthly_price != null) setMonthlyPrice(json.monthly_price / 100);
+        } else {
+          console.warn('Subscription status fetch error:', json.error);
+          setSubscriptionStatus(json.error || 'unknown');
+        }
+      } catch (e) {
+        console.warn('Subscription status fetch failed', e);
+        setSubscriptionStatus('unknown');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchStatus();
+  }, []);
   const [isSigningOut, setIsSigningOut] = useState(false);
   
   // New state for settings toggle
@@ -46,7 +60,7 @@ export default function ProfilePage() {
   // Early deterministic A/B variant assignment BEFORE user initiates cancellation flow
   useEffect(() => {
     const KEY = 'mm_downsell_variant';
-  const SALT = 'mm_downsell_v1_salt'; // TODO: move to env/server later
+  const SALT = process.env.NEXT_PUBLIC_AB_VARIANT_SALT || 'mm_downsell_v1_salt';
     const assign = async () => {
       if (typeof window === 'undefined') return;
       const existing = window.localStorage.getItem(KEY);
@@ -55,13 +69,13 @@ export default function ProfilePage() {
         return;
       }
       try {
-        const seed = mockUser.id; // stable user id (replace with real auth user id in production)
-    const data = new TextEncoder().encode(`${SALT}|${seed}`);
+  const seed = mockUser.id; // stable user id (replace with real auth user id in production)
+  const data = new TextEncoder().encode(`${SALT}|${seed}`);
         const hash = await crypto.subtle.digest('SHA-256', data);
         const first = new Uint8Array(hash)[0];
         const variant = first < 128 ? 'A' : 'B';
         window.localStorage.setItem(KEY, variant);
-    console.log('[Variant] Assigned downsell variant early:', variant, 'salt:', SALT);
+  console.log('[Variant] Assigned downsell variant early:', variant, 'salt:', SALT);
       } catch (e) {
         console.warn('[Variant] Failed to assign variant, defaulting to A', e);
         window.localStorage.setItem(KEY, 'A');
@@ -179,15 +193,20 @@ export default function ProfilePage() {
                     <p className="text-sm font-medium text-gray-900">Subscription status</p>
                   </div>
                   <div className="flex items-center space-x-2">
-                    {mockSubscriptionData.status === 'active' && !mockSubscriptionData.isTrialSubscription && !mockSubscriptionData.cancelAtPeriodEnd && (
+                    {subscriptionStatus === 'active' && (
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium bg-green-50 text-green-700 border border-green-200">
                         Active
+                      </span>
+                    )}
+                    {subscriptionStatus && subscriptionStatus !== 'active' && (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium bg-gray-100 text-gray-600 border border-gray-200 capitalize">
+                        {subscriptionStatus}
                       </span>
                     )}
                   </div>
                 </div>
 
-                {mockSubscriptionData.status === 'active' && !mockSubscriptionData.isTrialSubscription && !mockSubscriptionData.cancelAtPeriodEnd && (
+        {subscriptionStatus === 'active' && (
                   <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                     <div className="flex items-center space-x-3">
                       <div className="flex-shrink-0">
@@ -197,12 +216,7 @@ export default function ProfilePage() {
                       </div>
                       <p className="text-sm font-medium text-gray-900">Next payment</p>
                     </div>
-                    <p className="text-sm font-medium text-gray-900">
-                      {mockSubscriptionData.currentPeriodEnd && new Date(mockSubscriptionData.currentPeriodEnd).toLocaleDateString('en-US', {
-                        month: 'long',
-                        day: 'numeric'
-                      })}
-                    </p>
+          <p className="text-sm font-medium text-gray-900">{monthlyPrice != null ? `$${monthlyPrice}` : '-'}</p>
                   </div>
                 )}
               </div>
