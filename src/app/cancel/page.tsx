@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { CancellationStep, DownsellVariant, CancellationReason } from '@/types';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
+import { mockUser } from '@/lib/mockUser';
 
 import FoundJobStep from './FoundJobStep';
 import FoundJobStepReview from './FoundJobStep-review';
@@ -18,8 +19,8 @@ import PageEnd from './PageEnd';
 
 export default function CancellationFlow() {
   const router = useRouter();
-  // Mock user (replace with real auth user context)
-  const mockUserEmail = 'user1@example.com';
+  // Centralized mock user (replace with real auth user context).
+  const mockUserEmail = mockUser.email;
   const [step, setStep] = useState<CancellationStep>('initial');
   const [downsellVariant, setDownsellVariant] = useState<DownsellVariant | null>(null);
   const [reason, setReason] = useState<CancellationReason>({ foundJob: false });
@@ -42,18 +43,6 @@ export default function CancellationFlow() {
       if (existing === 'A' || existing === 'B') {
         setDownsellVariant(existing);
         console.log('[CancelFlow] Using pre-assigned variant:', existing);
-        return;
-      }
-      // TEMP TEST OVERRIDES (keep in sync with profile page):
-      const overrides: Record<string, DownsellVariant> = {
-        'user1@example.com': 'A',
-        'user2@example.com': 'B',
-        'user2@examplel.com': 'B',
-      };
-      if (overrides[mockUserEmail]) {
-        setDownsellVariant(overrides[mockUserEmail]);
-        window.localStorage.setItem(KEY, overrides[mockUserEmail]);
-        console.log('[CancelFlow] Assigned via test override:', overrides[mockUserEmail]);
         return;
       }
     }
@@ -259,10 +248,10 @@ export default function CancellationFlow() {
                 setVisaDetails(details);
                 // Persist cancellation immediately for found-job path (visa branch) if not already logged
                 if (!cancellationLogged) {
-      const conciseReason = `found_job: yes; visa_support: ${details.providesLawyer ? 'company_lawyer' : 'needs_support'}; visa_type: ${details.visaType || 'unspecified'}`;
+      const conciseReason = `found_job: yes`;
                   (async () => {
                     try {
-                      await fetch('/api/cancellations', {
+                      const resp = await fetch('/api/cancellations', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -272,9 +261,12 @@ export default function CancellationFlow() {
         accepted_downsell: false,
         visa_type: details.visaType || null,
         visa_help: !details.providesLawyer, // user needs help if company does NOT provide lawyer
-        found_job_with_mm: foundJobAnswers?.mmFound === 'Yes' ? true : (foundJobAnswers?.mmFound === 'No' ? false : null)
+        found_job_with_mm: foundJobAnswers?.mmFound === 'Yes' ? true : (foundJobAnswers?.mmFound === 'No' ? false : null),
+        review_feedback: review || null
                         })
                       });
+                      const respJson = await resp.json().catch(()=>({}));
+                      console.log('[CancelFlow] Cancellation API response', resp.status, respJson);
                       setCancellationLogged(true);
                       console.log('[CancelFlow] Cancellation persisted (visa path).');
                     } catch (e) {

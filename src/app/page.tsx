@@ -2,12 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-
-// Mock user data for UI display
-const mockUser = {
-  email: 'user@example.com',
-  id: '1'
-};
+import { mockUser } from '@/lib/mockUser';
 
 // Remote subscription status state
 
@@ -69,7 +64,8 @@ export default function ProfilePage() {
         return;
       }
       try {
-  const seed = mockUser.id; // stable user id (replace with real auth user id in production)
+  // Use email as stable seed (matches cancellation flow)
+  const seed = mockUser.email.toLowerCase();
   const data = new TextEncoder().encode(`${SALT}|${seed}`);
         const hash = await crypto.subtle.digest('SHA-256', data);
         const first = new Uint8Array(hash)[0];

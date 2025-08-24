@@ -18,7 +18,7 @@ const PageEnd: React.FC<PageEndProps> = ({ onBack, onClose, onFinish, userEmail,
     let aborted = false;
     const mark = async () => {
       try {
-        const res = await fetch('/api/cancellations', {
+  const res = await fetch('/api/cancellations', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -28,10 +28,12 @@ const PageEnd: React.FC<PageEndProps> = ({ onBack, onClose, onFinish, userEmail,
             accepted_downsell: acceptedDownsell,
             visa_type: null,
             visa_help: null,
-            found_job_with_mm: null
+            found_job_with_mm: null,
+            review_feedback: reasonText || null
           })
         });
-        const json = await res.json();
+  const json = await res.json().catch(()=>({}));
+  console.log('[PageEnd] cancellations POST response', res.status, json);
         if (!aborted) {
           if (!res.ok) {
             console.warn('[Cancel] Failed to persist cancellation:', json.error);
