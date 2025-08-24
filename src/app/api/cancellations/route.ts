@@ -8,6 +8,13 @@ import { sanitizeReason, sanitizeVisaType, sanitizeReviewFeedback } from '@/lib/
 export async function POST(request: Request) {
   if (!supabaseAdmin) return NextResponse.json({ error: 'supabase admin not configured' }, { status: 500 });
   try {
+    // CSRF protection: compare X-CSRF-Token header with csrf_token cookie
+    const csrfHeader = request.headers.get('x-csrf-token');
+    const cookieHeader = request.headers.get('cookie') || '';
+    const cookieToken = /(?:^|;\s*)csrf_token=([^;]+)/i.exec(cookieHeader)?.[1];
+    if (!csrfHeader || !cookieToken || csrfHeader !== cookieToken) {
+      return NextResponse.json({ error: 'invalid_csrf' }, { status: 403 });
+    }
     const body = await request.json().catch(() => ({}));
   const { email, downsell_variant, reason, accepted_downsell, visa_type, visa_help, found_job_with_mm, review_feedback } = body as {
       email?: string;

@@ -1,6 +1,6 @@
 "use client";
 
-import React from 'react';
+import React, { useRef } from 'react';
 import Image from 'next/image';
 
 interface PageEndProps {
@@ -14,13 +14,26 @@ interface PageEndProps {
 }
 
 const PageEnd: React.FC<PageEndProps> = ({ onBack, onClose, onFinish, userEmail, reasonText, downsellVariant, acceptedDownsell }) => {
+  const hasPostedRef = useRef(false);
   React.useEffect(() => {
+    if (hasPostedRef.current) return; // Guard against StrictMode double-invoke
+    hasPostedRef.current = true;
     let aborted = false;
     const mark = async () => {
       try {
+        // Acquire CSRF token (cached in ref/localStorage if desired)
+        let csrfToken: string | null = null;
+        try {
+          const r = await fetch('/api/csrf');
+          if (r.ok) {
+            const j = await r.json();
+            csrfToken = j.csrfToken;
+          }
+  } catch {}
   const res = await fetch('/api/cancellations', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          ...(csrfToken ? { headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken } } : {}),
           body: JSON.stringify({
             email: userEmail,
             downsell_variant: downsellVariant,
@@ -97,7 +110,7 @@ const PageEnd: React.FC<PageEndProps> = ({ onBack, onClose, onFinish, userEmail,
               <p>Changed your mind? You can reactivate anytime before your end date.</p>
             </div>
             <hr className="border-gray-200" />
-            <button
+            <button type="button"
               onClick={onFinish}
               className="w-full rounded-lg bg-[#9d77ff] px-6 py-3.5 text-center text-[15px] font-medium text-white shadow-sm transition hover:bg-[#875efb]"
             >

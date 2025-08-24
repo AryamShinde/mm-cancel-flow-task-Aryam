@@ -19,8 +19,18 @@ import PageEnd from './PageEnd';
 
 export default function CancellationFlow() {
   const router = useRouter();
-  // Centralized mock user (replace with real auth user context).
-  const mockUserEmail = mockUser.email;
+  // Determine active user email: query param > localStorage > mockUser
+  const [activeEmail, setActiveEmail] = useState<string>(mockUser.email);
+  useEffect(() => {
+    // On mount: parse query param
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const qp = params.get('email');
+      let chosen = qp || (typeof window !== 'undefined' ? localStorage.getItem('mm_selected_user_email') : null) || mockUser.email;
+      setActiveEmail(chosen);
+      if (typeof window !== 'undefined') localStorage.setItem('mm_selected_user_email', chosen);
+    } catch {}
+  }, []);
   const [step, setStep] = useState<CancellationStep>('initial');
   const [downsellVariant, setDownsellVariant] = useState<DownsellVariant | null>(null);
   const [reason, setReason] = useState<CancellationReason>({ foundJob: false });
@@ -34,33 +44,25 @@ export default function CancellationFlow() {
   // const FORCE_VARIANT: DownsellVariant = 'B';
   const [subscriptionPriceCents, setSubscriptionPriceCents] = useState<number | null>(null);
 
-  // ORIGINAL VARIANT ASSIGNMENT LOGIC (active)
+  // Always (re)compute deterministic variant for current user email on mount / email change
   useEffect(() => {
-    if (downsellVariant) return; // already set
-    const KEY = 'mm_downsell_variant';
-    if (typeof window !== 'undefined') {
-      const existing = window.localStorage.getItem(KEY);
-      if (existing === 'A' || existing === 'B') {
-        setDownsellVariant(existing);
-        console.log('[CancelFlow] Using pre-assigned variant:', existing);
-        return;
-      }
-    }
+    let cancelled = false;
     (async () => {
       try {
-        const seed = cryptoRandomFallback();
+    const seed = activeEmail.toLowerCase();
         const v = await deterministicVariant(seed);
+        if (cancelled) return;
         setDownsellVariant(v);
-        if (typeof window !== 'undefined') {
-          window.localStorage.setItem('mm_downsell_variant', v);
-        }
-        console.log('[CancelFlow] Assigned fallback variant:', v);
+        console.log('[CancelFlow] Deterministic variant set:', v, 'seed:', seed);
       } catch (e) {
-        setDownsellVariant('A');
-        console.warn('[CancelFlow] Fallback to A after error', e);
+        if (!cancelled) {
+          setDownsellVariant('A');
+          console.warn('[CancelFlow] Variant error; default A', e);
+        }
       }
     })();
-  }, [downsellVariant]);
+    return () => { cancelled = true; };
+  }, [activeEmail]);
 
   // ---------------------------------------------------------------------------
   // Forcing Variant B (Testing ONLY):
@@ -85,7 +87,7 @@ export default function CancellationFlow() {
     let cancelled = false;
     const load = async () => {
       try {
-        const res = await fetch(`/api/subscription-status?email=${encodeURIComponent(mockUserEmail)}`);
+    const res = await fetch(`/api/subscription-status?email=${encodeURIComponent(activeEmail)}`);
         const json = await res.json();
         if (!cancelled && res.ok && typeof json.monthly_price === 'number') {
           setSubscriptionPriceCents(json.monthly_price);
@@ -96,7 +98,7 @@ export default function CancellationFlow() {
     };
     load();
     return () => { cancelled = true; };
-  }, [mockUserEmail]);
+  }, [activeEmail]);
 
   // Helpers: deterministic hashing (SHA-256 first byte)
   const deterministicVariant = async (seed: string): Promise<DownsellVariant> => {
@@ -106,8 +108,6 @@ export default function CancellationFlow() {
     const first = new Uint8Array(hash)[0];
     return first < 128 ? 'A' : 'B';
   };
-  const cryptoRandomFallback = () => {
-    const a = new Uint8Array(1); crypto.getRandomValues(a); return `anon-${a[0]}`; };
   const getStableUserId = async (): Promise<string | null> => null; // TODO integrate auth
 
   const handleClose = () => router.push('/');
@@ -251,11 +251,20 @@ export default function CancellationFlow() {
       const conciseReason = `found_job: yes`;
                   (async () => {
                     try {
+                      // Ensure CSRF token
+                      let csrfToken: string | null = null;
+                      try {
+                        const r = await fetch('/api/csrf');
+                        if (r.ok) {
+                          const j = await r.json();
+                          csrfToken = j.csrfToken;
+                        }
+                      } catch {}
                       const resp = await fetch('/api/cancellations', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: { 'Content-Type': 'application/json', ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}) },
                         body: JSON.stringify({
-                          email: mockUserEmail,
+                          email: activeEmail,
                           downsell_variant: (downsellVariant || 'A'),
                           reason: conciseReason,
         accepted_downsell: false,
@@ -337,7 +346,7 @@ export default function CancellationFlow() {
           )}
           {step === 'pageEnd' && (
             <PageEnd
-              userEmail={mockUserEmail}
+              userEmail={activeEmail}
               reasonText={freeFormReason}
               downsellVariant={downsellVariant || 'A'}
               acceptedDownsell={acceptedDownsell}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { mockUser } from '@/lib/mockUser';
 
@@ -11,12 +11,44 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(false);
   const [subscriptionStatus, setSubscriptionStatus] = useState<string | null>(null);
   const [monthlyPrice, setMonthlyPrice] = useState<number | null>(null);
-  // Fetch subscription status from Supabase via API (hardcoded email)
+  // Dynamic user selection (dev/testing): fetch list & allow switching.
+  const [users, setUsers] = useState<string[]>([]);
+  const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+  const [selectedEmail, setSelectedEmail] = useState<string>(
+    typeof window !== 'undefined'
+      ? (localStorage.getItem('mm_selected_user_email') || mockUser.email)
+      : mockUser.email
+  );
+
+  // Fetch users list once
   useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch('/api/users');
+        const j = await r.json();
+        if (!cancelled && r.ok && Array.isArray(j.users)) {
+          setUsers(j.users);
+          // If selected email not in list, set to first
+          if (j.users.length && !j.users.includes(selectedEmail)) {
+            setSelectedEmail(j.users[0]);
+            if (typeof window !== 'undefined') localStorage.setItem('mm_selected_user_email', j.users[0]);
+          }
+        }
+      } catch (e) {
+        console.warn('[Profile] Failed to fetch users list', e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Fetch subscription status whenever selectedEmail changes
+  useEffect(() => {
+    if (!selectedEmail) return;
     const fetchStatus = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`/api/subscription-status?email=${encodeURIComponent(mockUser.email)}`);
+        const res = await fetch(`/api/subscription-status?email=${encodeURIComponent(selectedEmail)}`);
         const json = await res.json();
         if (res.ok) {
           setSubscriptionStatus(json.status);
@@ -33,7 +65,7 @@ export default function ProfilePage() {
       }
     };
     fetchStatus();
-  }, []);
+  }, [selectedEmail]);
   const [isSigningOut, setIsSigningOut] = useState(false);
   
   // New state for settings toggle
@@ -52,33 +84,39 @@ export default function ProfilePage() {
     console.log('Navigate to jobs');
   };
 
-  // Early deterministic A/B variant assignment BEFORE user initiates cancellation flow
+  // Always compute deterministic A/B variant when selectedEmail changes
   useEffect(() => {
+    if (!selectedEmail) return;
     const KEY = 'mm_downsell_variant';
-  const SALT = process.env.NEXT_PUBLIC_AB_VARIANT_SALT || 'mm_downsell_v1_salt';
-    const assign = async () => {
-      if (typeof window === 'undefined') return;
-      const existing = window.localStorage.getItem(KEY);
-      if (existing === 'A' || existing === 'B') {
-        console.log('[Variant] Existing downsell variant:', existing);
-        return;
-      }
+    const SALT = process.env.NEXT_PUBLIC_AB_VARIANT_SALT || 'mm_downsell_v1_salt';
+    (async () => {
       try {
-  // Use email as stable seed (matches cancellation flow)
-  const seed = mockUser.email.toLowerCase();
-  const data = new TextEncoder().encode(`${SALT}|${seed}`);
+        const seed = selectedEmail.toLowerCase();
+        const data = new TextEncoder().encode(`${SALT}|${seed}`);
         const hash = await crypto.subtle.digest('SHA-256', data);
         const first = new Uint8Array(hash)[0];
         const variant = first < 128 ? 'A' : 'B';
         window.localStorage.setItem(KEY, variant);
-  console.log('[Variant] Assigned downsell variant early:', variant, 'salt:', SALT);
+        console.log('[Variant] Deterministically assigned variant:', variant, 'for seed/email:', seed);
       } catch (e) {
-        console.warn('[Variant] Failed to assign variant, defaulting to A', e);
-        window.localStorage.setItem(KEY, 'A');
+        console.warn('[Variant] Failed to compute variant, defaulting to A', e);
+        try { window.localStorage.setItem(KEY, 'A'); } catch {}
+      }
+    })();
+  }, [selectedEmail]);
+
+  // Close dropdown on outside click
+  const dropdownRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!userDropdownOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setUserDropdownOpen(false);
       }
     };
-    assign();
-  }, []);
+    window.addEventListener('mousedown', handler);
+    return () => window.removeEventListener('mousedown', handler);
+  }, [userDropdownOpen]);
 
   if (loading) {
     return (
@@ -176,7 +214,48 @@ export default function ProfilePage() {
             <div className="space-y-3">
               <div>
                 <p className="text-sm font-medium text-gray-500">Email</p>
-                <p className="mt-1 text-md text-gray-900">{mockUser.email}</p>
+                <div className="mt-1 text-md text-gray-900 flex items-center space-x-2 relative" ref={dropdownRef}>
+                  <button
+                    type="button"
+                    onClick={() => setUserDropdownOpen(o => !o)}
+                    className="inline-flex items-center max-w-full truncate px-3 py-1.5 rounded-md border border-gray-300 bg-white hover:bg-gray-50 text-sm font-medium shadow-sm"
+                    title="Select test user"
+                  >
+                    <span className="truncate">{selectedEmail}</span>
+                    <svg className={`w-4 h-4 ml-2 transition-transform ${userDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  {userDropdownOpen && (
+                    <div className="absolute z-20 top-full mt-1 left-0 w-72 max-h-64 overflow-auto rounded-md border border-gray-200 bg-white shadow-lg">
+                      <div className="p-2 text-xs text-gray-500">Select a seeded user (dev only)</div>
+                      <ul className="divide-y divide-gray-100">
+                        {users.map(u => (
+                          <li key={u}>
+                            <button
+                              onClick={() => {
+                                setSelectedEmail(u);
+                                if (typeof window !== 'undefined') localStorage.setItem('mm_selected_user_email', u);
+                                setUserDropdownOpen(false);
+                              }}
+                              className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between hover:bg-indigo-50 ${u === selectedEmail ? 'bg-indigo-50/70 font-medium' : ''}`}
+                            >
+                              <span className="truncate">{u}</span>
+                              {u === selectedEmail && (
+                                <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                </svg>
+                              )}
+                            </button>
+                          </li>
+                        ))}
+                        {users.length === 0 && (
+                          <li className="px-3 py-2 text-sm text-gray-500">No users found</li>
+                        )}
+                      </ul>
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="pt-2 space-y-3">
                 <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
@@ -288,12 +367,18 @@ export default function ProfilePage() {
                     </button>
                     <button
                       onClick={() => {
-                        // Variant already assigned via useEffect above
-                        router.push('/cancel');
+                        if (subscriptionStatus === 'pending_cancellation') return; // disabled
+                        router.push(`/cancel?email=${encodeURIComponent(selectedEmail)}`);
                       }}
-                      className="inline-flex items-center justify-center w-full px-4 py-3 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-50 hover:border-red-300 transition-all duration-200 shadow-sm group"
+                      disabled={subscriptionStatus === 'pending_cancellation'}
+                      title={subscriptionStatus === 'pending_cancellation' ? 'Cancellation is already pending' : 'Cancel subscription'}
+                      className={`inline-flex items-center justify-center w-full px-4 py-3 rounded-lg transition-all duration-200 shadow-sm group
+                        ${subscriptionStatus === 'pending_cancellation'
+                          ? 'bg-gray-100 border border-gray-200 text-gray-400 cursor-not-allowed'
+                          : 'bg-white border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300'}
+                      `}
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 mr-2 transition-transform ${subscriptionStatus === 'pending_cancellation' ? '' : 'group-hover:scale-110'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                       </svg>
                       <span className="text-sm font-medium">Cancel Migrate Mate</span>
